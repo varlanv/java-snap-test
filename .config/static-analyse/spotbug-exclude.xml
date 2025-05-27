@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <Match>
+        <Bug code="EI, EI2, CT"/>
+    </Match>
+    <Match>
+        <Bug code="RV"/>
+        <Class name="com.varlanv.imp.it.ImpServerIntegrationTest$TemplateSuite"/>
+    </Match>
+    <Match>
+        <Bug code="NP"/>
+        <Method name="equals"/>
+    </Match>
+</FindBugsFilter>

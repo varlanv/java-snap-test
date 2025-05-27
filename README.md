@@ -1,0 +1,1 @@
+Gradle plugin and java library for snapshot testing with JUnit5.
