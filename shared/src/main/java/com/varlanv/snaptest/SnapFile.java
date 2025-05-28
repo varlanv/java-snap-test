@@ -5,22 +5,23 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class SnapFile {
 
     final Path path;
-    final Content content;
-    private final Lock writeLock = new ReentrantLock();
+    Content content;
+    private final Queue<SnapExpected> appends;
+    private final Lock writeLock;
 
     SnapFile(Path path, Content content) {
         this.path = path;
         this.content = content;
+        this.appends = new ConcurrentLinkedQueue<>();
+        this.writeLock = new ReentrantLock();
     }
 
     static SnapFile read(Path file) throws IOException {
@@ -81,10 +82,31 @@ final class SnapFile {
                     }
                     positionBuilder.append(ch);
                 }
+
+                var iterationInMethodBuilder = new StringBuilder();
+                for (var i = contentStartIndex + skipSize; i < endMarkerPos - 1; i++) {
+                    skipSize++;
+                    var ch = fileContent.charAt(i);
+                    if (ch == '\n') {
+                        break;
+                    }
+                    iterationInMethodBuilder.append(ch);
+                }
+                var iterationTestBuilder = new StringBuilder();
+                for (var i = contentStartIndex + skipSize; i < endMarkerPos - 1; i++) {
+                    skipSize++;
+                    var ch = fileContent.charAt(i);
+                    if (ch == '\n') {
+                        break;
+                    }
+                    iterationTestBuilder.append(ch);
+                }
                 var expectedValue = fileContent.substring(contentStartIndex + skipSize, endMarkerPos - 2);
                 var id = idBuilder.toString();
                 var position = Integer.parseInt(positionBuilder.toString());
-                var key = new SnapExpected.Key(id, position);
+                var iterationInMethod = Integer.parseInt(iterationInMethodBuilder.toString());
+                var iterationInTest = Integer.parseInt(iterationTestBuilder.toString());
+                var key = new SnapExpected.Key(id, position, iterationInMethod,iterationInTest);
                 items.computeIfAbsent(key, k -> new ArrayList<>()).add(new SnapExpected(key, expectedValue));
 
                 // Update the currentSearchIndex to look for the next start marker.
@@ -98,58 +120,62 @@ final class SnapFile {
     static SnapFile init(Path path, Content content) throws IOException {
         try (var bw = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
             bw.write(content.version + "\n\n\n");
-            var sortedMap = new TreeMap<>(content.assertions);
-            for (var snapExpectedList : sortedMap.values()) {
+            for (var snapExpectedList : content.assertions.values()) {
                 for (var snapExpected : snapExpectedList) {
-                    bw.write("\n" + Constants.SNAP_START_MARKER + "\n" + snapExpected.key.id + "\n" + snapExpected.key.position
-                        + "\n" + snapExpected.expected + "\n");
+                    bw.write(formatExpected(snapExpected));
                 }
             }
             bw.flush();
-            return new SnapFile(path, new Content(content.version, sortedMap));
+            return new SnapFile(path, content);
         }
     }
 
-    void recordAppend(String actual, String id, int position) {
-        //        appends.add(new Append(actual, id, position));
-    }
-
-    public void save(Iterable<SnapExpected> items) throws IOException {
-        //        try {
-        //            writeLock.lock();
-        //            if (!appends.isEmpty()) {
-        //                var sortedAppends = new TreeSet<SnapFile.Append>(Comparator.comparingInt(it -> it.position));
-        //                sortedAppends.addAll(currentAppends.get());
-        //                sortedAppends.addAll(appends);
-        //                                var actualWithMarkers = "\n" + Constants.SNAP_START_MARKER + "\n" + uniqueId +
-        // "\n" +
-        //                 actual + "\n";
-        //                                Files.writeString(file, actualWithMarkers, StandardOpenOption.APPEND);
-        //            }
-        //        } finally {
-        //            writeLock.unlock();
-        //        }
-    }
-
-    static final class Append {
-
-        final String actual;
-        final String id;
-        final int position;
-
-        Append(String actual, String id, int position) {
-            this.actual = actual;
-            this.id = id;
-            this.position = position;
+    void recordAppend(SnapExpected append) {
+        try {
+            writeLock.lock();
+            appends.add(append);
+        } finally {
+            writeLock.unlock();
         }
+    }
+
+    public Content save() throws IOException {
+        try {
+            writeLock.lock();
+            if (!appends.isEmpty()) {
+                var newContent = new TreeMap<>(content.assertions);
+                for (var append : appends) {
+                    newContent.computeIfAbsent(append.key, k -> new ArrayList<>()).add(append);
+                }
+
+                try (var bw = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    bw.write(content.version + "\n\n\n");
+                    for (var snapExpected : newContent) {
+                        bw.write(formatExpected(snapExpected));
+                    }
+                    bw.flush();
+                }
+                appends.clear();
+                return new Content(content.version, content.assertions);
+            } else {
+                return content;
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    private static String formatExpected(SnapExpected snapExpected) {
+        return "\n" + Constants.SNAP_START_MARKER + "\n" + snapExpected.key.id + "\n" + snapExpected.key.positionInClass + "\n"
+                + snapExpected.key.iterationInMethod + "\n" + snapExpected.expected + "\n";
     }
 
     static final class Content {
 
         final String version;
-        final Map<SnapExpected.Key, List<SnapExpected>> assertions;
+        final SortedMap<SnapExpected.Key, List<SnapExpected>> assertions;
 
-        Content(String version, Map<SnapExpected.Key, List<SnapExpected>> assertions) {
+        Content(String version, SortedMap<SnapExpected.Key, List<SnapExpected>> assertions) {
             this.version = version;
             this.assertions = assertions;
         }

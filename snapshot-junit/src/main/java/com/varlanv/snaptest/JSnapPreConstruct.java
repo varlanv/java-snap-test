@@ -7,9 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestInstanceFactoryContext;
 import org.junit.jupiter.api.extension.TestInstancePreConstructCallback;
@@ -43,19 +41,28 @@ final class JSnapPreConstruct implements TestInstancePreConstructCallback {
                 }
                 Files.createDirectories(fileDir);
                 var fileDirFinal = fileDir;
-                var file = SnapFile.read(fileDirFinal.resolve(fileName));
+                var file = fileDirFinal.resolve(fileName);
+                SnapFile snapFile;
+                if (Files.notExists(file)) {
+                    snapFile = SnapFile.init(file, new SnapFile.Content(Constants.VERSION, new TreeMap<>()));
+                } else {
+                    snapFile = SnapFile.read(file);
+                }
                 if (operation.get() == Snap.Operation.RECORD) {
                     var initialMessage = Constants.SNAP_INIT_STRING;
                     Files.writeString(
-                            file.path, initialMessage, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+                            snapFile.path,
+                            initialMessage,
+                            StandardOpenOption.TRUNCATE_EXISTING,
+                            StandardOpenOption.CREATE);
                 }
                 var sortedMethods = parseTopLevel(topLevelClass);
                 var items = new Snap[sortedMethods.size()];
-                var ctx = new Ctx(topLevelClass, file, fileDir, Arrays.asList(items));
+                var ctx = new Ctx(topLevelClass, snapFile, fileDir, Arrays.asList(items));
                 var position = 0;
                 for (var method : sortedMethods) {
-                    var item = new Snap(method.toString(), ctx.file, operation, AssertionFailedError::new, position);
-                    itemCache.put(method, item);
+                    var item = new Snap(method, ctx.file, operation, AssertionFailedError::new, position);
+                    itemCache.put(method.executable, item);
                     items[position] = item;
                     position++;
                 }
@@ -66,19 +73,20 @@ final class JSnapPreConstruct implements TestInstancePreConstructCallback {
         }
     }
 
-    private SortedSet<Method> parseTopLevel(Class<?> toplevelClass) {
+    private SortedSet<SnapExecutable> parseTopLevel(Class<?> toplevelClass) {
         var nestMembers = toplevelClass.getNestMembers();
-        var itemMethods = new TreeSet<>(Comparator.comparing(Method::getName));
+        var itemMethods = new TreeSet<SnapExecutable>(Comparator.comparing(it -> it.name));
         for (var nestMember : nestMembers) {
             if (nestMember == toplevelClass || nestMember.isAnnotationPresent(Nested.class)) {
                 for (var method : nestMember.getDeclaredMethods()) {
-                    if (isTestMethod(method)) {
+                    var testType = resolveTestType(method);
+                    if (testType != TestType.NONE) {
                         if (method.getParameterCount() > 0) {
                             var countSnapParams = 0;
                             for (var parameterType : method.getParameterTypes()) {
                                 if (parameterType == Snap.class) {
                                     countSnapParams++;
-                                    itemMethods.add(method);
+                                    itemMethods.add(new SnapExecutable(method, method.toString(), testType));
                                 }
                             }
                             if (countSnapParams > 1) {
@@ -92,10 +100,20 @@ final class JSnapPreConstruct implements TestInstancePreConstructCallback {
         return itemMethods;
     }
 
-    private boolean isTestMethod(Method method) {
-        return method.isAnnotationPresent(Test.class)
-                || method.isAnnotationPresent(ParameterizedTest.class)
-                || method.isAnnotationPresent(TestFactory.class);
+    private TestType resolveTestType(Method method) {
+        if (method.isAnnotationPresent(Test.class)) {
+            return TestType.SIMPLE;
+        } else if (method.isAnnotationPresent(ParameterizedTest.class)) {
+            return TestType.PARAMETERIZED;
+        } else if (method.isAnnotationPresent(TestFactory.class)) {
+            return TestType.FACTORY;
+        } else if (method.isAnnotationPresent(RepeatedTest.class)) {
+            return TestType.REPEATED;
+        } else if (method.isAnnotationPresent(TestTemplate.class)) {
+            return TestType.TEMPLATE;
+        } else {
+            return TestType.NONE;
+        }
     }
 
     static final class Ctx {

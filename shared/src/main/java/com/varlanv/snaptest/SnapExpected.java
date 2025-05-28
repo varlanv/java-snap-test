@@ -28,20 +28,21 @@ final class SnapExpected {
 
     @Override
     public String toString() {
-        return "SnapExpected{" +
-            "key=" + key +
-            ", expected='" + expected + '\'' +
-            '}';
+        return "SnapExpected{" + "key=" + key + ", expected='" + expected + '\'' + '}';
     }
 
     static final class Key implements Comparable<Key> {
 
         final String id;
-        final int position;
+        final int positionInClass;
+        final int iterationInMethod;
+        final int countInTest;
 
-        Key(String id, int position) {
+        Key(String id, int positionInClass, int iterationInMethod, int countInTest) {
             this.id = id;
-            this.position = position;
+            this.positionInClass = positionInClass;
+            this.iterationInMethod = iterationInMethod;
+            this.countInTest = countInTest;
         }
 
         @Override
@@ -50,25 +51,37 @@ final class SnapExpected {
                 return false;
             }
             var key = (Key) o;
-            return position == key.position && Objects.equals(id, key.id);
+            return positionInClass == key.positionInClass && iterationInMethod == key.iterationInMethod && countInTest == key.countInTest && Objects.equals(id, key.id);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, position);
+            return Objects.hash(id, positionInClass, iterationInMethod, countInTest);
         }
 
         @Override
         public String toString() {
             return "Key{" +
                 "id='" + id + '\'' +
-                ", position=" + position +
+                ", positionInClass=" + positionInClass +
+                ", iterationInMethod=" + iterationInMethod +
+                ", countInTest=" + countInTest +
                 '}';
         }
 
         @Override
         public int compareTo(SnapExpected.Key o) {
-            return Integer.compare(position, o.position);
+            var inClass = Integer.compare(positionInClass, o.positionInClass);
+            if (inClass != 0) {
+                return inClass;
+            } else {
+                var inMethod = Integer.compare(iterationInMethod, o.iterationInMethod);
+                if (inMethod != 0) {
+                    return inMethod;
+                } else{
+                    return Integer.compare(countInTest, o.countInTest);
+                }
+            }
         }
     }
 }

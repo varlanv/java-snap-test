@@ -13,8 +13,10 @@ final class JSnapAfterAll implements AfterAllCallback {
 
     @Override
     public void afterAll(ExtensionContext context) throws Exception {
-        for (var cacheCtx : parent.cache.values()) {
-            //            cacheCtx.file.save();
+        var topLevel = InternalJUnitUtils.findTopLevel(context);
+        var ctx = parent.cache.get(topLevel);
+        if (ctx != null) {
+            ctx.file.save();
         }
     }
 }

@@ -1,10 +1,12 @@
 package com.varlanv.snaptest;
 
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.junit.jupiter.api.extension.*;
 
-public final class JSnap implements ParameterResolver, TestInstancePreConstructCallback, AfterAllCallback {
+public final class JSnap
+        implements ParameterResolver, TestInstancePreConstructCallback, AfterAllCallback, InvocationInterceptor {
 
     private final MemoizedSupplier<Snap.Operation> operation;
     private final MemoizedSupplier<Path> workDir;
@@ -62,5 +64,34 @@ public final class JSnap implements ParameterResolver, TestInstancePreConstructC
         var topLevel = InternalJUnitUtils.findTopLevel(context);
         var ctx = preConstruct.cache.get(topLevel);
         if (ctx != null) {}
+    }
+
+    @Override
+    public <T> T interceptTestFactoryMethod(
+            Invocation<T> invocation,
+            ReflectiveInvocationContext<Method> invocationContext,
+            ExtensionContext extensionContext)
+            throws Throwable {
+        return invocation.proceed();
+    }
+
+    @Override
+    public void interceptTestTemplateMethod(
+            Invocation<Void> invocation,
+            ReflectiveInvocationContext<Method> invocationContext,
+            ExtensionContext extensionContext)
+            throws Throwable {
+        System.err.println(extensionContext.getUniqueId());
+        invocation.proceed();
+    }
+
+    @Override
+    public void interceptDynamicTest(
+            Invocation<Void> invocation,
+            DynamicTestInvocationContext invocationContext,
+            ExtensionContext extensionContext)
+            throws Throwable {
+        System.err.println(extensionContext.getUniqueId());
+        invocation.proceed();
     }
 }

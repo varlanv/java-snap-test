@@ -1,27 +1,41 @@
 package com.varlanv.snaptest;
 
+import com.varlanv.snaptest.commontest.FastTest;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @ExtendWith(JSnap.class)
-class SnapTest {
+class SnapTest implements FastTest {
 
-    @TestFactory
-    Stream<DynamicTest> dynamic(Snap snap) {
-        return IntStream.range(0, 10)
-                .mapToObj(i -> String.valueOf(i).repeat(10))
-                .map(string -> DynamicTest.dynamicTest(string, () -> snap.apply(string)));
+    @ParameterizedTest(name = "kek {0} {0}")
+    @ValueSource(ints = {5, 10, 15, 20})
+    @DisplayName("parameterized {0} {0}")
+    void parameterized_0_0(int i, Snap snap) {
+        snap.apply(String.valueOf(i));
     }
 
+    @MethodSource
     @ParameterizedTest
-    @ValueSource(ints = {5, 10, 15, 20})
-    @DisplayName("parameterized")
-    void parameterized(int i, Snap snap) {
-        snap.apply(String.valueOf(i));
+    @DisplayName("parameterized string")
+    void parameterized_string(String expectedString, Snap snap) {
+        snap.apply(expectedString);
+    }
+
+    Stream<String> parameterized_string() {
+        return IntStream.rangeClosed(1, 10).mapToObj(i -> String.valueOf(i).repeat(10));
+    }
+
+    @TestFactory
+    @DisplayName("whatever")
+    Stream<DynamicTest> whatever(Snap snap) {
+        return IntStream.rangeClosed(1, 10)
+                .mapToObj(i -> String.valueOf(i).repeat(10))
+                .map(string -> DynamicTest.dynamicTest(string, () -> snap.apply(string)));
     }
 
     @Test
@@ -43,7 +57,7 @@ class SnapTest {
     }
 
     @Nested
-    class Nested1Test {
+    class Nested1Test implements FastTest {
 
         @Test
         @DisplayName("nested1")
@@ -57,7 +71,7 @@ class SnapTest {
         }
 
         @Nested
-        class Nested2Test {
+        class Nested2Test implements FastTest {
 
             @Test
             @DisplayName("nested2")
