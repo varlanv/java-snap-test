@@ -5,7 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -25,7 +28,7 @@ final class SnapFile {
             throw new IllegalStateException("Snaptest file does not exist: " + file.toAbsolutePath());
         } else {
             // Read the entire file content into a single string
-            var items = new HashMap<String, List<SnapExpected>>();
+            var items = new TreeMap<SnapExpected.Key, List<SnapExpected>>();
             var fileContent = Files.readString(file, StandardCharsets.UTF_8);
 
             var currentSearchIndex = 0; // Start searching from the beginning of the file
@@ -81,7 +84,8 @@ final class SnapFile {
                 var expectedValue = fileContent.substring(contentStartIndex + skipSize, endMarkerPos - 1);
                 var id = idBuilder.toString();
                 var position = Integer.parseInt(positionBuilder.toString());
-                items.computeIfAbsent(id, k -> new ArrayList<>()).add(new SnapExpected(id, expectedValue, position));
+                var key = new SnapExpected.Key(id, position);
+                items.computeIfAbsent(key, k -> new ArrayList<>()).add(new SnapExpected(key, expectedValue));
 
                 // Update the currentSearchIndex to look for the next start marker.
                 // It should be positioned after the current end marker and its line.
@@ -89,8 +93,8 @@ final class SnapFile {
                 if (currentSearchIndex < fileContent.length()) {
                     char firstCharAfterEndMarker = fileContent.charAt(currentSearchIndex);
                     if (firstCharAfterEndMarker == '\r'
-                            && currentSearchIndex + 1 < fileContent.length()
-                            && fileContent.charAt(currentSearchIndex + 1) == '\n') {
+                        && currentSearchIndex + 1 < fileContent.length()
+                        && fileContent.charAt(currentSearchIndex + 1) == '\n') {
                         currentSearchIndex += 2; // Skip CRLF
                     } else if (firstCharAfterEndMarker == '\n' || firstCharAfterEndMarker == '\r') {
                         currentSearchIndex += 1; // Skip LF or CR
@@ -104,15 +108,16 @@ final class SnapFile {
     static SnapFile init(Path path, Content content) throws IOException {
         try (var bw = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
             bw.write(content.version + "\n\n\n");
-            var sorted = new TreeSet<SnapExpected>(Comparator.comparingInt(it -> it.position));
-            content.assertions.forEach((ignore, value) -> sorted.addAll(value));
-            for (var snapExpected : sorted) {
-                bw.write("\n" + Constants.SNAP_START_MARKER + "\n" + snapExpected.id + "\n" + snapExpected.position
+            var sortedMap = new TreeMap<>(content.assertions);
+            for (var snapExpectedList : sortedMap.values()) {
+                for (var snapExpected : snapExpectedList) {
+                    bw.write("\n" + Constants.SNAP_START_MARKER + "\n" + snapExpected.key.id + "\n" + snapExpected.key.position
                         + "\n" + snapExpected.expected + "\n");
+                }
             }
             bw.flush();
+            return new SnapFile(path, new Content(content.version, sortedMap));
         }
-        return new SnapFile(path, content);
     }
 
     void recordAppend(String actual, String id, int position) {
@@ -152,9 +157,9 @@ final class SnapFile {
     static final class Content {
 
         final String version;
-        final Map<String, List<SnapExpected>> assertions;
+        final Map<SnapExpected.Key, List<SnapExpected>> assertions;
 
-        Content(String version, Map<String, List<SnapExpected>> assertions) {
+        Content(String version, Map<SnapExpected.Key, List<SnapExpected>> assertions) {
             this.version = version;
             this.assertions = assertions;
         }

@@ -4,30 +4,71 @@ import java.util.Objects;
 
 final class SnapExpected {
 
-    final String id;
+    final Key key;
     final String expected;
-    final int position;
 
-    SnapExpected(String id, String expected, int position) {
-        this.id = id;
+    SnapExpected(Key key, String expected) {
+        this.key = key;
         this.expected = expected;
-        this.position = position;
     }
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        SnapExpected that = (SnapExpected) o;
-        return position == that.position && Objects.equals(id, that.id) && Objects.equals(expected, that.expected);
+        if (!(o instanceof SnapExpected)) {
+            return false;
+        }
+        var that = (SnapExpected) o;
+        return Objects.equals(key, that.key) && Objects.equals(expected, that.expected);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, expected, position);
+        return Objects.hash(key, expected);
     }
 
     @Override
     public String toString() {
-        return "SnapExpected{" + "id='" + id + '\'' + ", expected='" + expected + '\'' + ", position=" + position + '}';
+        return "SnapExpected{" +
+            "key=" + key +
+            ", expected='" + expected + '\'' +
+            '}';
+    }
+
+    static final class Key implements Comparable<Key> {
+
+        final String id;
+        final int position;
+
+        Key(String id, int position) {
+            this.id = id;
+            this.position = position;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Key)) {
+                return false;
+            }
+            var key = (Key) o;
+            return position == key.position && Objects.equals(id, key.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, position);
+        }
+
+        @Override
+        public String toString() {
+            return "Key{" +
+                "id='" + id + '\'' +
+                ", position=" + position +
+                '}';
+        }
+
+        @Override
+        public int compareTo(SnapExpected.Key o) {
+            return Integer.compare(position, o.position);
+        }
     }
 }
