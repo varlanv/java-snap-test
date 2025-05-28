@@ -57,7 +57,7 @@ final class SnapFile {
                 // Search must begin *after* the start marker, ideally after contentStartIndex.
                 var endMarkerPos = fileContent.indexOf(Constants.SNAP_START_MARKER, contentStartIndex);
                 if (endMarkerPos == -1) {
-                    endMarkerPos = fileContent.length();
+                    endMarkerPos = fileContent.length() + 1;
                 }
 
                 // The expected content is the substring between the calculated contentStartIndex
@@ -81,7 +81,7 @@ final class SnapFile {
                     }
                     positionBuilder.append(ch);
                 }
-                var expectedValue = fileContent.substring(contentStartIndex + skipSize, endMarkerPos - 1);
+                var expectedValue = fileContent.substring(contentStartIndex + skipSize, endMarkerPos - 2);
                 var id = idBuilder.toString();
                 var position = Integer.parseInt(positionBuilder.toString());
                 var key = new SnapExpected.Key(id, position);
@@ -89,17 +89,7 @@ final class SnapFile {
 
                 // Update the currentSearchIndex to look for the next start marker.
                 // It should be positioned after the current end marker and its line.
-                currentSearchIndex = endMarkerPos + Constants.SNAP_START_MARKER_LEN;
-                if (currentSearchIndex < fileContent.length()) {
-                    char firstCharAfterEndMarker = fileContent.charAt(currentSearchIndex);
-                    if (firstCharAfterEndMarker == '\r'
-                        && currentSearchIndex + 1 < fileContent.length()
-                        && fileContent.charAt(currentSearchIndex + 1) == '\n') {
-                        currentSearchIndex += 2; // Skip CRLF
-                    } else if (firstCharAfterEndMarker == '\n' || firstCharAfterEndMarker == '\r') {
-                        currentSearchIndex += 1; // Skip LF or CR
-                    }
-                }
+                currentSearchIndex = endMarkerPos;
             }
             return new SnapFile(file, new Content(version, items));
         }
