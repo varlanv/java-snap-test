@@ -8,7 +8,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @ExtendWith(JSnap.class)
-class SnapTest {
+class OtherSnapTest {
 
     @TestFactory
     Stream<DynamicTest> dynamic(Snap snap) {
@@ -29,17 +29,17 @@ class SnapTest {
     void multiline_string(Snap snap) {
         snap.apply(
                 """
-                Some java
-                Multi
-                Line string -- \r
+            Some java
+            Multi
+            Line string -- \r
 
-                with \n\r
-                additional
-                crlfs
+            with \n\r
+            additional
+            crlfs
 
 
-                like so
-                """);
+            like so
+            """);
     }
 
     @Nested

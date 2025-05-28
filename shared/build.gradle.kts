@@ -6,4 +6,5 @@ plugins {
 
 dependencies {
     compileOnly(projects.constants)
+    testCompileOnly(projects.constants)
 }
